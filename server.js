@@ -3,46 +3,72 @@ const app = express();
 
 app.use(express.json());
 
-const VERSION = "v2.2 - add-on response fix";
-const PING_COMMAND_ID = 1;
+const VERSION = "v3.0 - comandos style";
 
-app.get("/", (req, res) => {
-  res.send(`Servidor ativo | ${VERSION}`);
-});
-
-app.get("/webhook", (req, res) => {
-  res.send(`Webhook ativo | ${VERSION} | use POST`);
-});
+const COMMANDS = {
+  PING: 1,
+  DENTO: 2,
+  FEIJAO: 3
+};
 
 app.post("/webhook", (req, res) => {
   try {
     console.log("========== NOVA VERSÃO ==========");
     console.log("VERSÃO:", VERSION);
-    console.log("CHEGOU REQUEST");
-    console.log(JSON.stringify(req.body, null, 2));
 
     const chatEvent = req.body.chat || {};
     let message = { text: "Não entendi 😅" };
 
-    if (chatEvent.appCommandPayload) {
-      const commandId =
-        chatEvent.appCommandPayload.appCommandMetadata?.appCommandId;
+    const payload = chatEvent.appCommandPayload;
+
+    if (payload) {
+      const commandId = payload.appCommandMetadata?.appCommandId;
 
       console.log("commandId:", commandId);
 
-      if (commandId === PING_COMMAND_ID) {
-        message = { text: `🏓 Pong! (${VERSION})` };
+      // 🏓 ping
+      if (commandId === COMMANDS.PING) {
+        message = { text: "🏓 Pong!" };
       }
-    } else {
-      const text = chatEvent.messagePayload?.message?.text || "";
-      console.log("text:", text);
 
-      if (text.trim() === "/ping") {
-        message = { text: `🏓 Pong! (${VERSION})` };
+      // 😎 dento
+      if (commandId === COMMANDS.DENTO) {
+        message = { text: "Ai dento 😎" };
+      }
+
+      // 🍛 feijao (COM IMAGEM 🔥)
+      if (commandId === COMMANDS.FEIJAO) {
+        message = {
+          cardsV2: [
+            {
+              cardId: "feijao-card",
+              card: {
+                sections: [
+                  {
+                    widgets: [
+                      {
+                        textParagraph: {
+                          text: "<b>Feijão com farinha 🍛</b>"
+                        }
+                      },
+                      {
+                        image: {
+                          imageUrl:
+                            "https://us-tuna-sounds-images.voicemod.net/fe163b3d-09c8-4ebb-b825-29a3547ec7e7-1753581040063.webp",
+                          altText: "Feijão com farinha"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        };
       }
     }
 
-    const responseBody = {
+    return res.status(200).json({
       hostAppDataAction: {
         chatDataAction: {
           createMessageAction: {
@@ -50,11 +76,8 @@ app.post("/webhook", (req, res) => {
           }
         }
       }
-    };
+    });
 
-    console.log("RESPONSE BODY:", JSON.stringify(responseBody, null, 2));
-
-    return res.status(200).json(responseBody);
   } catch (error) {
     console.error("ERRO:", error);
 
