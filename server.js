@@ -1,5 +1,6 @@
 const express = require("express");
 const { GoogleAuth } = require("google-auth-library");
+const cron = require("node-cron");
 
 const app = express();
 app.use(express.json());
@@ -15,6 +16,7 @@ const COMMANDS = {
 const CHAT_SPACE = process.env.CHAT_SPACE; // ex: spaces/AAAA...
 const SCHEDULER_TOKEN = process.env.SCHEDULER_TOKEN;
 
+// 🔥 função que envia mensagem como o Dento
 async function sendAsDento(message) {
   const auth = new GoogleAuth({
     scopes: ["https://www.googleapis.com/auth/chat.bot"]
@@ -47,6 +49,32 @@ async function sendAsDento(message) {
   return data;
 }
 
+// =========================
+// ⏰ CRON (MEIO-DIA)
+// =========================
+cron.schedule(
+  "0 12 * * *",
+  async () => {
+    console.log("⏰ Hora do feijão!");
+
+    try {
+      await sendAsDento({
+        text: "Hora de feijão com farinha... al mosso!"
+      });
+
+      console.log("✅ Mensagem enviada pelo Dento");
+    } catch (err) {
+      console.error("❌ Erro no cron:", err.message);
+    }
+  },
+  {
+    timezone: "America/Sao_Paulo"
+  }
+);
+
+// =========================
+// WEBHOOK (COMANDOS)
+// =========================
 app.post("/webhook", (req, res) => {
   try {
     console.log("========== NOVA VERSÃO ==========");
@@ -61,14 +89,17 @@ app.post("/webhook", (req, res) => {
       const commandId = payload.appCommandMetadata?.appCommandId;
       console.log("commandId:", commandId);
 
+      // ✅ ping
       if (commandId === COMMANDS.PING) {
         message = { text: "Bot funcionando." };
       }
 
+      // 😎 dento
       if (commandId === COMMANDS.DENTO) {
         message = { text: "Ai dento 😎" };
       }
 
+      // 🍛 feijão (card)
       if (commandId === COMMANDS.FEIJAO) {
         message = {
           cardsV2: [
@@ -124,6 +155,9 @@ app.post("/webhook", (req, res) => {
   }
 });
 
+// =========================
+// ROTA MANUAL (opcional)
+// =========================
 app.post("/scheduler/feijao", async (req, res) => {
   try {
     const token = req.headers["x-scheduler-token"];
@@ -143,5 +177,8 @@ app.post("/scheduler/feijao", async (req, res) => {
   }
 });
 
+// =========================
+// START SERVER
+// =========================
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Rodando... ${VERSION}`));
