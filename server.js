@@ -1,6 +1,7 @@
 const express = require("express");
-const app = express();
+const { GoogleAuth } = require("google-auth-library");
 
+const app = express();
 app.use(express.json());
 
 const VERSION = "v3.0 - comandos style";
@@ -10,6 +11,41 @@ const COMMANDS = {
   DENTO: 2,
   FEIJAO: 3
 };
+
+const CHAT_SPACE = process.env.CHAT_SPACE; // ex: spaces/AAAA...
+const SCHEDULER_TOKEN = process.env.SCHEDULER_TOKEN;
+
+async function sendAsDento(message) {
+  const auth = new GoogleAuth({
+    scopes: ["https://www.googleapis.com/auth/chat.bot"]
+  });
+
+  const client = await auth.getClient();
+  const tokenResponse = await client.getAccessToken();
+  const accessToken = tokenResponse.token || tokenResponse;
+
+  const response = await fetch(
+    `https://chat.googleapis.com/v1/${CHAT_SPACE}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(message)
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      `Erro ao enviar mensagem como Dento: ${response.status} ${JSON.stringify(data)}`
+    );
+  }
+
+  return data;
+}
 
 app.post("/webhook", (req, res) => {
   try {
@@ -23,20 +59,16 @@ app.post("/webhook", (req, res) => {
 
     if (payload) {
       const commandId = payload.appCommandMetadata?.appCommandId;
-
       console.log("commandId:", commandId);
 
-      // 🏓 ping
       if (commandId === COMMANDS.PING) {
-        message = { text: "🏓 Pong!" };
+        message = { text: "Bot funcionando." };
       }
 
-      // 😎 dento
       if (commandId === COMMANDS.DENTO) {
         message = { text: "Ai dento 😎" };
       }
 
-      // 🍛 feijao (COM IMAGEM 🔥)
       if (commandId === COMMANDS.FEIJAO) {
         message = {
           cardsV2: [
@@ -77,7 +109,6 @@ app.post("/webhook", (req, res) => {
         }
       }
     });
-
   } catch (error) {
     console.error("ERRO:", error);
 
@@ -85,13 +116,30 @@ app.post("/webhook", (req, res) => {
       hostAppDataAction: {
         chatDataAction: {
           createMessageAction: {
-            message: {
-              text: "Erro interno 😥"
-            }
+            message: { text: "Erro interno 😥" }
           }
         }
       }
     });
+  }
+});
+
+app.post("/scheduler/feijao", async (req, res) => {
+  try {
+    const token = req.headers["x-scheduler-token"];
+
+    if (token !== SCHEDULER_TOKEN) {
+      return res.status(401).json({ ok: false, error: "unauthorized" });
+    }
+
+    await sendAsDento({
+      text: "Hora de feijão com farinha... al mosso!"
+    });
+
+    return res.status(200).json({ ok: true });
+  } catch (error) {
+    console.error("ERRO SCHEDULER:", error);
+    return res.status(500).json({ ok: false, error: error.message });
   }
 });
 
