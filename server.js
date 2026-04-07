@@ -53,7 +53,7 @@ async function sendAsDento(message) {
 // ⏰ CRON (MEIO-DIA)
 // =========================
 cron.schedule(
-  "0 12 * * *",
+  "* * * * *",
   async () => {
     console.log("⏰ Hora do feijão!");
 
