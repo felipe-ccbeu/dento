@@ -3,8 +3,6 @@ const app = express();
 
 app.use(express.json());
 
-const PING_COMMAND_ID = 1; // coloque aqui o mesmo ID cadastrado no Google Chat
-
 app.get("/", (req, res) => {
   res.send("Servidor rodando.");
 });
@@ -18,38 +16,29 @@ app.post("/webhook", (req, res) => {
     console.log("BODY:", JSON.stringify(req.body, null, 2));
 
     const event = req.body;
+    const chat = event.chat || {};
+    const payload = chat.appCommandPayload || {};
+    const message = payload.message || {};
+    const metadata = payload.appCommandMetadata || {};
 
-    // Quando o app é adicionado
-    if (event.type === "ADDED_TO_SPACE") {
-      return res.status(200).json({
-        text: "Olá! Estou online 🙌"
-      });
-    }
+    const text = message.text || "";
+    const commandId = metadata.appCommandId;
+    const commandName =
+      message.annotations?.find(a => a.type === "SLASH_COMMAND")?.slashCommand?.commandName;
 
-    // Comando do Google Chat configurado no Console
-    const commandId = event.appCommandPayload?.appCommandMetadata?.appCommandId;
+    let resposta = "Não entendi 😅";
 
-    if (event.type === "APP_COMMAND" && commandId === PING_COMMAND_ID) {
-      return res.status(200).json({
-        text: "🏓 Pong!"
-      });
-    }
-
-    // Mensagem comum
-    const text = event.message?.text || "";
-
-    if (event.type === "MESSAGE" && text.includes("/ping")) {
-      return res.status(200).json({
-        text: "🏓 Pong!"
-      });
+    if (commandId === 1 || commandName === "/ping" || text.trim() === "/ping") {
+      resposta = "🏓 Pong!";
     }
 
     return res.status(200).json({
-      text: "Não entendi 😅"
+      text: resposta
     });
 
   } catch (error) {
-    console.error(error);
+    console.error("ERRO:", error);
+
     return res.status(200).json({
       text: "Erro interno 😥"
     });
