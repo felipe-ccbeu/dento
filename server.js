@@ -1,14 +1,14 @@
 const express = require("express");
 const { GoogleAuth } = require("google-auth-library");
 const cron = require("node-cron");
+const fs = require("fs");
 
-// 👇 garante fetch (caso Node antigo no Render)
 const fetch = global.fetch || require("node-fetch");
 
 const app = express();
 app.use(express.json());
 
-const VERSION = "v3.1 - debug auth";
+const VERSION = "v3.3 - auth fallback";
 
 const COMMANDS = {
   PING: 1,
@@ -18,78 +18,98 @@ const COMMANDS = {
 
 const CHAT_SPACE = process.env.CHAT_SPACE;
 const GOOGLE_CREDENTIALS_PATH = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+const GOOGLE_SERVICE_ACCOUNT_JSON = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
 
-// =========================
-// 🔍 LOG INICIAL (CRUCIAL)
-// =========================
 console.log("========== INIT ==========");
 console.log("VERSION:", VERSION);
-console.log("CHAT_SPACE:", CHAT_SPACE);
-console.log("GOOGLE_APPLICATION_CREDENTIALS:", GOOGLE_CREDENTIALS_PATH);
+console.log("CHAT_SPACE:", CHAT_SPACE || "(não definido)");
+console.log(
+  "GOOGLE_APPLICATION_CREDENTIALS:",
+  GOOGLE_CREDENTIALS_PATH || "(não definido)"
+);
+console.log(
+  "GOOGLE_SERVICE_ACCOUNT_JSON:",
+  GOOGLE_SERVICE_ACCOUNT_JSON ? "(definido)" : "(não definido)"
+);
+
+if (GOOGLE_CREDENTIALS_PATH) {
+  console.log(
+    "Arquivo existe?",
+    fs.existsSync(GOOGLE_CREDENTIALS_PATH) ? "sim" : "não"
+  );
+}
 console.log("==========================");
 
-// =========================
-// 🔥 SEND MESSAGE (DENTO)
-// =========================
-async function sendAsDento(message) {
-  try {
-    if (!CHAT_SPACE) {
-      throw new Error("CHAT_SPACE não definido");
+function createGoogleAuth() {
+  if (GOOGLE_SERVICE_ACCOUNT_JSON) {
+    let credentials;
+
+    try {
+      credentials = JSON.parse(GOOGLE_SERVICE_ACCOUNT_JSON);
+    } catch (err) {
+      throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON inválido");
     }
 
-    if (!GOOGLE_CREDENTIALS_PATH) {
-      throw new Error("GOOGLE_APPLICATION_CREDENTIALS não definido");
-    }
-
-    const auth = new GoogleAuth({
+    return new GoogleAuth({
+      credentials,
       scopes: ["https://www.googleapis.com/auth/chat.bot"]
     });
+  }
 
-    const client = await auth.getClient();
+  if (GOOGLE_CREDENTIALS_PATH) {
+    if (!fs.existsSync(GOOGLE_CREDENTIALS_PATH)) {
+      throw new Error(
+        `O arquivo em ${GOOGLE_CREDENTIALS_PATH} não existe`
+      );
+    }
 
-    console.log("🔐 Auth client criado");
+    return new GoogleAuth({
+      keyFilename: GOOGLE_CREDENTIALS_PATH,
+      scopes: ["https://www.googleapis.com/auth/chat.bot"]
+    });
+  }
 
-    const tokenResponse = await client.getAccessToken();
-    const accessToken = tokenResponse.token || tokenResponse;
+  throw new Error(
+    "Nenhuma credencial configurada. Use GOOGLE_APPLICATION_CREDENTIALS ou GOOGLE_SERVICE_ACCOUNT_JSON"
+  );
+}
 
-    console.log("🔑 Token obtido");
+async function sendAsDento(message) {
+  if (!CHAT_SPACE) {
+    throw new Error("CHAT_SPACE não definido");
+  }
 
-    const url = `https://chat.googleapis.com/v1/${CHAT_SPACE}/messages`;
+  const auth = createGoogleAuth();
+  const client = await auth.getClient();
+  const tokenResponse = await client.getAccessToken();
+  const accessToken = tokenResponse.token || tokenResponse;
 
-    console.log("📡 Enviando para:", url);
-
-    const response = await fetch(url, {
+  const response = await fetch(
+    `https://chat.googleapis.com/v1/${CHAT_SPACE}/messages`,
+    {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify(message)
-    });
-
-    const data = await response.json();
-
-    console.log("📥 Response status:", response.status);
-    console.log("📥 Response body:", data);
-
-    if (!response.ok) {
-      throw new Error(
-        `Erro API Google: ${response.status} - ${JSON.stringify(data)}`
-      );
     }
+  );
 
-    return data;
-  } catch (error) {
-    console.error("🔥 ERRO sendAsDento:", error.message);
-    throw error;
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      `Erro ao enviar mensagem como Dento: ${response.status} ${JSON.stringify(data)}`
+    );
   }
+
+  return data;
 }
 
-// =========================
-// ⏰ CRON
-// =========================
+// teste a cada 1 minuto
 cron.schedule(
-  "* * * * *", // 👈 TESTE (1 min)
+  "* * * * *",
   async () => {
     console.log("⏰ Hora do feijão!");
 
@@ -97,7 +117,6 @@ cron.schedule(
       await sendAsDento({
         text: "Hora de feijão com farinha... al mosso!"
       });
-
       console.log("✅ Mensagem enviada pelo Dento");
     } catch (err) {
       console.error("❌ Erro no cron:", err.message);
@@ -108,13 +127,8 @@ cron.schedule(
   }
 );
 
-// =========================
-// WEBHOOK
-// =========================
 app.post("/webhook", (req, res) => {
   try {
-    console.log("========== WEBHOOK ==========");
-
     const chatEvent = req.body.chat || {};
     let message = { text: "Não entendi 😅" };
 
@@ -187,8 +201,5 @@ app.post("/webhook", (req, res) => {
   }
 });
 
-// =========================
-// START
-// =========================
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Rodando... ${VERSION}`));
