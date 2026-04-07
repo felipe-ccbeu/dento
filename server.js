@@ -54,7 +54,7 @@ app.post("/webhook", (req, res) => {
                       {
                         image: {
                           imageUrl:
-                            "https://us-tuna-sounds-images.voicemod.net/fe163b3d-09c8-4ebb-b825-29a3547ec7e7-1753581040063.webp",
+                            "https://media.tenor.com/IasXzJ3eW9MAAAAM/feijao-com-farinha.gif",
                           altText: "Feijão com farinha"
                         }
                       }
