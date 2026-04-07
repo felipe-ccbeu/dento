@@ -4,23 +4,32 @@ const app = express();
 app.use(express.json());
 
 app.post("/webhook", (req, res) => {
-  const text = req.body.message?.text || "";
+  try {
+    console.log("BODY:", JSON.stringify(req.body, null, 2));
 
-  let resposta = "Comando não reconhecido 😅";
+    const message = req.body.message || {};
+    
+    const text = message.text || "";
+    const slashCommand = message.slashCommand?.commandName;
 
-  if (text === "/ping") {
-    resposta = "🏓 Pong!";
+    let resposta = "Não entendi 😅";
+
+    if (text.includes("/ping") || slashCommand === "/ping") {
+      resposta = "🏓 Pong!";
+    }
+
+    return res.status(200).json({
+      text: resposta
+    });
+
+  } catch (error) {
+    console.error(error);
+
+    return res.status(200).json({
+      text: "Erro interno 😥"
+    });
   }
-
-  if (text === "/hora") {
-    resposta = `Agora são: ${new Date().toLocaleString()}`;
-  }
-
-  if (text.startsWith("/eco")) {
-    resposta = text.replace("/eco ", "");
-  }
-
-  res.json({ text: resposta });
 });
 
-app.listen(3000, () => console.log("Rodando..."));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("Rodando..."));
